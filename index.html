@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AR Ceramic Quest: ผจญภัยโลกเซรามิก</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Kanit & Prompt -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700;800&family=Prompt:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Tone.js สำหรับเสียงเอฟเฟกต์ในเกม -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Canvas Confetti สำหรับเอฟเฟกต์ฉลองชัยชนะ -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            overflow: hidden;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            background-color: #1a120b;
+        }
+
+        /* เอฟเฟกต์พื้นหลังจำลอง AR กรณีไม่เปิดกล้อง */
+        .ar-simulated-bg {
+            background: radial-gradient(circle at 50% 40%, #3e2723 0%, #1a120b 70%, #0d0905 100%);
+            position: relative;
+        }
+
+        /* เส้นสแกน AR */
+        .ar-scanner-line {
+            position: absolute;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #f59e0b, #fbbf24, #f59e0b, transparent);
+            box-shadow: 0 0 15px #f59e0b;
+            animation: scan 3s linear infinite;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        @keyframes scan {
+            0% { top: 0%; opacity: 0; }
+            10% { opacity: 0.8; }
+            90% { opacity: 0.8; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        /* กรอบมุมกล้อง AR */
+        .ar-corner {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border-color: rgba(251, 191, 36, 0.7);
+            border-style: solid;
+            pointer-events: none;
+            z-index: 5;
+        }
+        .ar-tl { top: 15px; left: 15px; border-width: 4px 0 0 4px; border-radius: 8px 0 0 0; }
+        .ar-tr { top: 15px; right: 15px; border-width: 4px 4px 0 0; border-radius: 0 8px 0 0; }
+        .ar-bl { bottom: 15px; left: 15px; border-width: 0 0 4px 4px; border-radius: 0 0 0 8px; }
+        .ar-br { bottom: 15px; right: 15px; border-width: 0 4px 4px 0; border-radius: 0 0 8px 0; }
+
+        /* เอฟเฟกต์ลอยตัวแบบวัตถุ AR 3D */
+        @keyframes float3D {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(2deg); }
+        }
+        .ar-float {
+            animation: float3D 4s ease-in-out infinite;
+        }
+
+        /* การ์ดเปิดแผ่นป้าย (3D Flip) */
+        .perspective {
+            perspective: 1000px;
+        }
+        .flip-card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
+            transform-style: preserve-3d;
+        }
+        .flipped .flip-card-inner {
+            transform: rotateY(180deg);
+        }
+        .flip-card-front, .flip-card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            border-radius: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem;
+        }
+        .flip-card-back {
+            transform: rotateY(180deg);
+        }
+
+        /* เอฟเฟกต์ Glassmorphism สำหรับ UI บนหน้าจอ AR */
+        .ar-glass {
+            background: rgba(28, 20, 13, 0.78);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(251, 191, 36, 0.35);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .ar-glass-light {
+            background: rgba(255, 251, 235, 0.92);
+            backdrop-filter: blur(10px);
+            border: 2px solid #f59e0b;
+        }
+
+        /* ปุ่มเกม 3D นูนสวย */
+        .btn-game {
+            transition: all 0.15s ease;
+            box-shadow: 0 5px 0 #b45309, 0 8px 15px rgba(0,0,0,0.4);
+        }
+        .btn-game:active {
+            transform: translateY(4px);
+            box-shadow: 0 1px 0 #b45309, 0 3px 6px rgba(0,0,0,0.4);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+        ::-webkit-scrollbar-thumb { background: #d97706; border-radius: 10px; }
+
+        /* เอฟเฟกต์สั่นเมื่อตอบผิด */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-6px); }
+            40%, 80% { transform: translateX(6px); }
+        }
+        .shake-anim {
+            animation: shake 0.4s ease-in-out;
+        }
+    </style>
+</head>
+<body class="text-white h-screen w-screen relative overflow-hidden">
+
+    <!-- วิดีโอกล้อง AR พื้นหลัง -->
+    <video id="ar-camera" autoplay playsinline muted class="fixed inset-0 w-full h-full object-cover z-0 hidden"></video>
+    
+    <!-- พื้นหลังจำลอง AR (แสดงเมื่อไม่มีกล้องหรือผู้เล่นเลือกโหมดจำลอง) -->
+    <div id="ar-fallback-bg" class="fixed inset-0 w-full h-full ar-simulated-bg z-0">
+        <!-- วงแหวนเรดาร์ AR ตกแต่ง -->
+        <div class="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
+            <div class="w-72 h-72 md:w-96 md:h-96 rounded-full border-2 border-dashed border-amber-400 animate-spin" style="animation-duration: 25s;"></div>
+            <div class="absolute w-52 h-52 md:w-72 md:h-72 rounded-full border border-amber-300 animate-ping" style="animation-duration: 4s;"></div>
+        </div>
+    </div>
+
+    <!-- กรอบ HUD กล้อง AR -->
+    <div class="ar-scanner-line"></div>
+    <div class="ar-corner ar-tl"></div>
+    <div class="ar-corner ar-tr"></div>
+    <div class="ar-corner ar-bl"></div>
+    <div class="ar-corner ar-br"></div>
+
+    <!-- ========================================== -->
+    <!-- หน้าจอที่ 1: หน้าปกเกม (Cover Screen)         -->
+    <!-- ========================================== -->
+    <div id="screen-cover" class="relative z-20 h-full w-full flex flex-col items-center justify-between p-4 md:p-8 overflow-y-auto">
+        <!-- แถบสถานะ AR ด้านบน -->
+        <div class="w-full max-w-2xl flex justify-between items-center ar-glass px-4 py-2 rounded-full text-xs md:text-sm">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span id="camera-status-text" class="text-amber-200 font-medium">AR SYSTEM READY</span>
+            </div>
+            <button onclick="toggleCamera()" id="btn-toggle-cam" class="bg-amber-600/40 hover:bg-amber-600/70 border border-amber-400/50 px-3 py-1 rounded-full text-xs font-semibold transition flex items-center gap-1">
+                <span>📷 เปิดกล้อง AR</span>
+            </button>
+        </div>
+
+        <!-- กลางหน้าปก: โลโก้และตัวละคร/วัตถุ 3D SVG -->
+        <div class="flex flex-col items-center text-center my-auto py-2 max-w-xl">
+            <!-- ป้ายชื่อโหมดการเรียนรู้ -->
+            <div class="bg-gradient-to-r from-amber-500 to-orange-600 text-white text-xs md:text-sm font-bold px-4 py-1 rounded-full shadow-lg mb-3 tracking-wider uppercase border border-amber-200/50">
+                ✨ AR Interactive Science Game ✨
+            </div>
+
+            <!-- ภาพประกอบ SVG แจกันและเครื่องปั้นดินเผา AR ลอยได้ -->
+            <div class="relative w-44 h-44 md:w-56 md:h-56 mb-2 ar-float flex items-center justify-center">
+                <!-- แสงออร่าด้านหลัง -->
+                <div class="absolute inset-4 bg-amber-500/30 rounded-full blur-xl"></div>
+                <svg viewBox="0 0 240 240" class="w-full h-full drop-shadow-2xl">
+                    <!-- ฐานโฮโลแกรม AR -->
+                    <ellipse cx="120" cy="210" rx="85" ry="18" fill="none" stroke="#fbbf24" stroke-width="2.5" stroke-dasharray="8 4"/>
+                    <ellipse cx="120" cy="210" rx="60" ry="11" fill="rgba(251, 191, 36, 0.25)"/>
+                    
+                    <!-- แจกันเซรามิกหลัก (ทรงสุโขทัย/ร่วมสมัย) -->
+                    <defs>
+                        <linearGradient id="vaseGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#f97316"/>
+                            <stop offset="50%" stop-color="#c2410c"/>
+                            <stop offset="100%" stop-color="#7c2d12"/>
+                        </linearGradient>
+                        <linearGradient id="glazeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.85"/>
+                            <stop offset="100%" stop-color="#0284c7" stop-opacity="0.95"/>
+                        </linearGradient>
+                    </defs>
+                    
+                    <!-- ตัวแจกัน -->
+                    <path d="M95 55 C95 75, 65 95, 65 135 C65 175, 88 195, 95 202 L145 202 C152 195, 175 175, 175 135 C175 95, 145 75, 145 55 Z" fill="url(#vaseGrad)" stroke="#ffedd5" stroke-width="2"/>
+                    <!-- ปากแจกัน -->
+                    <ellipse cx="120" cy="55" rx="27" ry="7" fill="#9a3412" stroke="#fed7aa" stroke-width="2"/>
+                    <!-- น้ำยาเคลือบเงาสีฟ้าเทอร์ควอยซ์ไหลด้านบน -->
+                    <path d="M95 57 C95 72, 74 88, 70 112 C80 118, 88 104, 96 115 C105 126, 114 108, 123 118 C132 128, 142 108, 150 116 C158 122, 165 108, 170 110 C166 86, 145 72, 145 57 Z" fill="url(#glazeGrad)"/>
+                    <!-- ลวดลายไทย/เรขาคณิตบนเซรามิก -->
+                    <path d="M68 145 Q94 132 120 145 T172 145" fill="none" stroke="#fde68a" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M72 158 Q96 145 120 158 T168 158" fill="none" stroke="#fed7aa" stroke-width="2" stroke-dasharray="4 4"/>
+                    
+                    <!-- ประกายไฟและเพชรควอตซ์ลอยรอบๆ -->
+                    <polygon points="40,85 48,72 56,85 48,98" fill="#38bdf8" stroke="#fff" stroke-width="1.5"/>
+                    <polygon points="190,115 197,104 204,115 197,126" fill="#fbbf24" stroke="#fff" stroke-width="1.5"/>
+                    <circle cx="52" cy="145" r="5" fill="#f43f5e"/>
+                    <text x="175" y="75" font-size="22">🔥</text>
+                    <text x="38" y="55" font-size="20">✨</text>
+                </svg>
+            </div>
+
+            <!-- ชื่อเกม -->
+            <h1 class="text-3xl sm:text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-amber-200 via-amber-400 to-orange-500 drop-shadow-md leading-tight">
+                AR ผจญภัยโลกเซรามิก
+            </h1>
+            <p class="text-amber-100/90 text-sm sm:text-base md:text-lg mt-2 max-w-md font-light">
+                ตะลุยภารกิจ 3 ด่านสุดท้าทาย! เรียนรู้วัตถุดิบ การขึ้นรูป การเผาเคลือบ และประโยชน์ของเซรามิกในโลกเสมือนจริง
+            </p>
+
+            <!-- แสดงตัวอย่าง 3 ด่าน -->
+            <div class="grid grid-cols-3 gap-2 sm:gap-3 w-full mt-5 text-xs sm:text-sm">
+                <div class="ar-glass p-2.5 rounded-2xl border border-amber-400/40 flex flex-col items-center">
+                    <span class="text-xl sm:text-2xl mb-1">🎴</span>
+                    <span class="font-bold text-amber-300">ด่านที่ 1</span>
+                    <span class="text-gray-200 text-[11px] sm:text-xs">เปิดแผ่นป้ายความจำ</span>
+                </div>
+                <div class="ar-glass p-2.5 rounded-2xl border border-amber-400/40 flex flex-col items-center">
+                    <span class="text-xl sm:text-2xl mb-1">🔗</span>
+                    <span class="font-bold text-amber-300">ด่านที่ 2</span>
+                    <span class="text-gray-200 text-[11px] sm:text-xs">จับคู่พิชิตเซรามิก</span>
+                </div>
+                <div class="ar-glass p-2.5 rounded-2xl border border-amber-400/40 flex flex-col items-center">
+                    <span class="text-xl sm:text-2xl mb-1">🏆</span>
+                    <span class="font-bold text-amber-300">ด่านที่ 3</span>
+                    <span class="text-gray-200 text-[11px] sm:text-xs">ควิซเซียน 5 ข้อ</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ปุ่มเริ่มเกม และ ปุ่มอ่านใบความรู้ -->
+        <div class="w-full max-w-md flex flex-col sm:flex-row gap-3 pb-2">
+            <button onclick="openStudyModal()" class="flex-1 bg-amber-950/80 hover:bg-amber-900 border-2 border-amber-400 text-amber-200 font-bold py-3.5 px-5 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 text-base">
+                <span>📖 ทบทวนความรู้ก่อนลุย</span>
+            </button>
+            <button onclick="startGame()" class="flex-1 bg-gradient-to-b from-amber-400 to-orange-600 hover:from-amber-300 hover:to-orange-500 text-white font-extrabold py-3.5 px-6 rounded-2xl btn-game flex items-center justify-center gap-2 text-lg tracking-wide">
+                <span>🚀 เริ่มผจญภัยเลย!</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- หน้าจอที่ 2: พื้นที่เล่นเกม (Gameplay Screen)  -->
+    <!-- ========================================== -->
+    <div id="screen-game" class="hidden relative z-20 h-full w-full flex flex-col justify-between p-3 sm:p-5 max-w-4xl mx-auto">
+        
+        <!-- HUD ด้านบน: ด่าน, เวลา, คะแนน -->
+        <div class="ar-glass rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2">
+            <!-- ปุ่มออก / ดูสรุปเนื้อหา -->
+            <div class="flex items-center gap-2">
+                <button onclick="confirmExit()" class="bg-red-500/20 hover:bg-red-500/40 border border-red-400/50 text-red-200 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold">
+                    🏠 หน้าหลัก
+                </button>
+                <div class="bg-amber-500/20 border border-amber-400/50 px-3 py-1.5 rounded-xl">
+                    <span id="hud-level-badge" class="text-amber-300 font-bold text-xs sm:text-sm">ด่านที่ 1/3</span>
+                </div>
+            </div>
+
+            <!-- นาฬิกาจับเวลา -->
+            <div class="flex items-center gap-2 bg-black/50 px-4 py-1.5 rounded-full border border-amber-400/40">
+                <span class="text-lg">⏱️</span>
+                <span id="hud-timer" class="font-mono text-lg sm:text-xl font-extrabold text-amber-300">01:00</span>
+            </div>
+
+            <!-- คะแนนสะสม -->
+            <div class="flex items-center gap-2 bg-emerald-950/60 border border-emerald-400/40 px-3.5 py-1.5 rounded-xl">
+                <span class="text-base">⭐</span>
+                <span class="text-xs text-emerald-200 hidden sm:inline">คะแนน:</span>
+                <span id="hud-score" class="font-extrabold text-emerald-300 text-base sm:text-lg">0</span>
+            </div>
+        </div>
+
+        <!-- แถบคำสั่งประจำด่าน -->
+        <div class="text-center my-2">
+            <h2 id="level-title" class="text-xl sm:text-2xl font-extrabold text-amber-300 drop-shadow">ด่านที่ 1: เปิดแผ่นป้ายเซรามิก</h2>
+            <p id="level-instruction" class="text-xs sm:text-sm text-amber-100/90">จับคู่ภาพและคำศัพท์ให้ถูกต้องทั้งหมดก่อนหมดเวลา!</p>
+        </div>
+
+        <!-- พื้นที่กระดานเกมแบบไดนามิก -->
+        <div id="game-board" class="flex-1 w-full flex items-center justify-center overflow-y-auto py-1">
+            <!-- เนื้อหาของแต่ละด่านจะถูกสร้างที่นี่ด้วย JS -->
+        </div>
+
+        <!-- แถบแจ้งเตือนสถานะ / คอมโบด้านล่าง -->
+        <div class="h-8 flex items-center justify-center">
+            <div id="feedback-toast" class="opacity-0 transition-opacity duration-300 px-4 py-1 rounded-full text-xs sm:text-sm font-bold bg-amber-500 text-black shadow-lg">
+                เยี่ยมมาก! +100 คะแนน
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- หน้าจอที่ 3: สรุปผลระหว่างด่าน (Level Clear)  -->
+    <!-- ========================================== -->
+    <div id="modal-level-clear" class="hidden fixed inset-0 z-30 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="ar-glass border-2 border-amber-400 rounded-3xl p-6 max-w-md w-full text-center shadow-2xl transform transition-all">
+            <div id="level-clear-icon" class="text-6xl mb-2 animate-bounce">🎉</div>
+            <h3 id="level-clear-title" class="text-2xl sm:text-3xl font-extrabold text-amber-300 mb-1">ผ่านด่านที่ 1!</h3>
+            <p id="level-clear-subtitle" class="text-sm text-gray-200 mb-5">สุดยอดไปเลย นักสำรวจเซรามิก!</p>
+
+            <div class="bg-black/40 rounded-2xl p-4 space-y-2.5 mb-6 text-sm sm:text-base border border-amber-500/30">
+                <div class="flex justify-between">
+                    <span class="text-gray-300">คะแนนประจำด่าน:</span>
+                    <span id="lc-base-score" class="font-bold text-white">+400</span>
+                </div>
+                <div class="flex justify-between text-amber-300">
+                    <span>⚡ โบนัสความเร็ว (เหลือ <span id="lc-time-left">0</span> วิ):</span>
+                    <span id="lc-time-bonus" class="font-bold">+150</span>
+                </div>
+                <div class="border-t border-gray-600 pt-2 flex justify-between text-lg font-extrabold text-emerald-400">
+                    <span>คะแนนรวมปัจจุบัน:</span>
+                    <span id="lc-total-score">550</span>
+                </div>
+            </div>
+
+            <button id="btn-next-level" onclick="proceedNextLevel()" class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold py-3.5 rounded-2xl shadow-lg text-lg transition transform active:scale-95">
+                ลุยด่านต่อไป ➡️
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- หน้าจอที่ 4: สรุปคะแนนรวมหลังจบเกม (Summary)  -->
+    <!-- ========================================== -->
+    <div id="screen-summary" class="hidden relative z-30 h-full w-full flex items-center justify-center p-4 overflow-y-auto">
+        <div class="ar-glass border-2 border-amber-400 rounded-3xl p-5 sm:p-8 max-w-lg w-full text-center shadow-2xl my-auto">
+            <div class="text-5xl sm:text-6xl mb-2">🏆</div>
+            <div class="inline-block bg-amber-500/20 border border-amber-400 text-amber-300 text-xs font-bold px-3 py-1 rounded-full mb-2">
+                MISSION ACCOMPLISHED
+            </div>
+            <h2 class="text-2xl sm:text-3xl font-extrabold text-white mb-1">สรุปผลการผจญภัยเซรามิก</h2>
+            <p id="summary-rank" class="text-base sm:text-lg font-bold text-amber-400 mb-4">ฉายา: ปรมาจารย์เครื่องปั้นดินเผาระดับตำนาน!</p>
+
+            <!-- ตารางคะแนนรายด่าน -->
+            <div class="bg-black/45 rounded-2xl p-4 space-y-2.5 text-sm sm:text-base border border-amber-400/30 mb-5">
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-200">🎴 ด่านที่ 1 (เปิดแผ่นป้าย):</span>
+                    <span id="sum-l1" class="font-bold text-amber-300">0 คะแนน</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-200">🔗 ด่านที่ 2 (จับคู่เซรามิก):</span>
+                    <span id="sum-l2" class="font-bold text-amber-300">0 คะแนน</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-200">📝 ด่านที่ 3 (ควิซ 5 ข้อ):</span>
+                    <span id="sum-l3" class="font-bold text-amber-300">0 คะแนน</span>
+                </div>
+                <div class="border-t border-dashed border-gray-600 my-1"></div>
+                <div class="flex justify-between items-center text-sky-300">
+                    <span>⚡ โบนัสเวลาคงเหลือรวม:</span>
+                    <span id="sum-bonus-time" class="font-bold">+0 คะแนน</span>
+                </div>
+                <div class="flex justify-between items-center text-pink-300">
+                    <span>🔥 โบนัสพิเศษ (ผ่านครบ 3 ด่าน):</span>
+                    <span id="sum-bonus-clear" class="font-bold">+0 คะแนน</span>
+                </div>
+                <div class="border-t-2 border-amber-500/50 pt-2.5 flex justify-between items-center text-xl sm:text-2xl font-extrabold text-emerald-400">
+                    <span>คะแนนสุทธิ:</span>
+                    <span id="sum-grand-total">0</span>
+                </div>
+            </div>
+
+            <!-- ปุ่มเล่นใหม่ (สุ่มโจทย์ใหม่ทั้งหมด) -->
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button onclick="openStudyModal()" class="flex-1 bg-amber-900/70 hover:bg-amber-800 border border-amber-400 text-amber-200 font-bold py-3 px-4 rounded-2xl transition text-sm sm:text-base">
+                    📖 ทบทวนเนื้อหา
+                </button>
+                <button onclick="startGame()" class="flex-1 bg-gradient-to-b from-amber-400 to-orange-600 hover:from-amber-300 hover:to-orange-500 text-white font-extrabold py-3 px-5 rounded-2xl btn-game text-base sm:text-lg">
+                    🔄 เล่นใหม่ (สุ่มโจทย์ใหม่)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- หน้าต่างใบความรู้ (Study Note Modal)         -->
+    <!-- ========================================== -->
+    <div id="modal-study" class="hidden fixed inset-0 z-40 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="ar-glass-light text-stone-800 rounded-3xl p-5 sm:p-7 max-w-xl w-full max-h-[88vh] flex flex-col shadow-2xl">
+            <div class="flex justify-between items-center border-b-2 border-amber-300 pb-3 mb-4">
+                <div class="flex items-center gap-2">
+                    <span class="bg-orange-500 text-white font-extrabold px-3 py-1 rounded-full text-sm sm:text-base">เซรามิก (Ceramic)</span>
+                </div>
+                <button onclick="closeStudyModal()" class="bg-stone-200 hover:bg-stone-300 text-stone-700 w-8 h-8 rounded-full font-bold flex items-center justify-center">✕</button>
+            </div>
+
+            <div class="overflow-y-auto space-y-4 pr-1 text-sm sm:text-base leading-relaxed">
+                <div class="bg-amber-100/80 p-3.5 rounded-2xl border border-amber-300">
+                    <p class="font-bold text-orange-800 text-base sm:text-lg mb-1">🏺 ความหมายของเซรามิก</p>
+                    <p>ผลิตภัณฑ์ที่ทำจากวัตถุดิบในธรรมชาติ เช่น <strong>ดิน หิน ทราย</strong> นำมาผสมแล้วนำไปเผา</p>
+                </div>
+
+                <div class="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm">
+                    <p class="font-bold text-amber-800 mb-1">1. วัตถุดิบที่ใช้ในอุตสาหกรรมเซรามิก</p>
+                    <ul class="list-disc list-inside space-y-1 text-stone-700">
+                        <li><strong>วัตถุดิบหลัก:</strong> ดิน เฟลด์สปาร์ และควอตซ์</li>
+                        <li><strong>วัตถุดิบเสริม:</strong> แร่และสารประกอบออกไซด์</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm">
+                    <p class="font-bold text-amber-800 mb-1">2. การขึ้นรูปผลิตภัณฑ์ ทำได้ 2 วิธี</p>
+                    <ul class="list-disc list-inside space-y-1 text-stone-700">
+                        <li><strong>การเทแบบ</strong> (หล่อน้ำดินลงในแม่พิมพ์)</li>
+                        <li><strong>การใช้แป้นหมุน</strong> (ปั้นขึ้นรูปบนแป้นที่กำลังหมุน)</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm">
+                    <p class="font-bold text-amber-800 mb-1">3. การเผาและเคลือบ มี 2 ขั้นตอน</p>
+                    <ul class="list-disc list-inside space-y-1 text-stone-700">
+                        <li><strong>การเผาดิบ:</strong> เพื่อให้ผลิตภัณฑ์คงรูป ไม่แตกชำรุด</li>
+                        <li><strong>การเผาเคลือบ:</strong> โดยการนำมาเคลือบน้ำยาแล้วนำไปให้ความร้อน</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm">
+                    <p class="font-bold text-amber-800 mb-1">4. การใช้ประโยชน์วัสดุประเภทเซรามิก</p>
+                    <p class="text-stone-700">เช่น <strong>ผลิตภัณฑ์จากแก้ว ปูนซีเมนต์</strong> เครื่องถ้วยชาม กระเบื้อง</p>
+                </div>
+            </div>
+
+            <button onclick="closeStudyModal()" class="mt-4 w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-2xl shadow transition">
+                เข้าใจแล้ว พร้อมลุยเกม!
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal ยืนยันการออกจากเกม (แทน confirm()) -->
+    <div id="modal-confirm-exit" class="hidden fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+        <div class="ar-glass border border-amber-400 rounded-2xl p-6 max-w-xs w-full text-center">
+            <p class="text-lg font-bold text-amber-300 mb-2">กลับสู่หน้าหลัก?</p>
+            <p class="text-sm text-gray-300 mb-5">คะแนนในรอบปัจจุบันจะไม่ถูกบันทึก</p>
+            <div class="flex gap-3">
+                <button onclick="closeExitModal()" class="flex-1 bg-gray-700 hover:bg-gray-600 py-2.5 rounded-xl font-bold text-sm">เล่นต่อ</button>
+                <button onclick="exitToCover()" class="flex-1 bg-red-600 hover:bg-red-500 py-2.5 rounded-xl font-bold text-sm">ออก</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* =====================================================================
+           1. ระบบเสียงเอฟเฟกต์ด้วย Tone.js (ไม่ต้องใช้ไฟล์เสียงภายนอก)
+           ===================================================================== */
+        let audioReady = false;
+        let synth = null;
+
+        function initAudio() {
+            if (!audioReady && typeof Tone !== 'undefined') {
+                Tone.start();
+                synth = new Tone.PolySynth(Tone.Synth).toDestination();
+                synth.volume.value = -8;
+                audioReady = true;
+            }
+        }
+
+        function playSound(type) {
+            try {
+                initAudio();
+                if (!synth) return;
+                const now = Tone.now();
+                if (type === 'flip') {
+                    synth.triggerAttackRelease("C5", "32n", now);
+                } else if (type === 'match') {
+                    synth.triggerAttackRelease(["E5", "G5", "C6"], "16n", now);
+                } else if (type === 'wrong') {
+                    synth.triggerAttackRelease(["A2", "Eb2"], "8n", now);
+                } else if (type === 'win') {
+                    synth.triggerAttackRelease("C5", "16n", now);
+                    synth.triggerAttackRelease("E5", "16n", now + 0.1);
+                    synth.triggerAttackRelease("G5", "16n", now + 0.2);
+                    synth.triggerAttackRelease("C6", "4n", now + 0.3);
+                } else if (type === 'click') {
+                    synth.triggerAttackRelease("G4", "32n", now);
+                }
+            } catch (e) { /* ข้ามหากเบราว์เซอร์บล็อกเสียง */ }
+        }
+
+        /* =====================================================================
+           2. ระบบกล้อง AR (WebRTC Camera Stream พร้อม Fallback ฉากจำลอง)
+           ===================================================================== */
+        let cameraActive = false;
+        let mediaStream = null;
+
+        async function toggleCamera() {
+            playSound('click');
+            const videoEl = document.getElementById('ar-camera');
+            const fallbackEl = document.getElementById('ar-fallback-bg');
+            const statusText = document.getElementById('camera-status-text');
+            const btnCam = document.getElementById('btn-toggle-cam');
+
+            if (!cameraActive) {
+                try {
+                    mediaStream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: "environment" },
+                        audio: false
+                    });
+                    videoEl.srcObject = mediaStream;
+                    videoEl.classList.remove('hidden');
+                    fallbackEl.classList.add('opacity-20'); // ให้เห็นวงแหวน AR จางๆ ทับกล้องจริง
+                    cameraActive = true;
+                    statusText.textContent = "AR CAMERA LIVE";
+                    btnCam.innerHTML = "<span>🚫 ปิดกล้อง AR</span>";
+                } catch (err) {
+                    statusText.textContent = "AR SIMULATION MODE";
+                    btnCam.innerHTML = "<span>⚠️ ใช้โหมดจำลอง AR</span>";
+                    showToast("ไม่พบกล้องหรือไม่ได้รับอนุญาต ใช้โหมดจำลอง AR แทน", "bg-amber-500 text-black");
+                }
+            } else {
+                if (mediaStream) {
+                    mediaStream.getTracks().forEach(track => track.stop());
+                }
+                videoEl.classList.add('hidden');
+                fallbackEl.classList.remove('opacity-20');
+                cameraActive = false;
+                statusText.textContent = "AR SIMULATION READY";
+                btnCam.innerHTML = "<span>📷 เปิดกล้อง AR</span>";
+            }
+        }
+
+        /* =====================================================================
+           3. คลังข้อมูลเนื้อหาเรื่อง "เซรามิก" จากภาพต้นฉบับ (สำหรับสุ่มทั้ง 3 ด่าน)
+           ===================================================================== */
+        
+        // ข้อมูลสำหรับด่านที่ 1: เปิดแผ่นป้าย (การ์ดคู่คำศัพท์ + คำอธิบายสั้น/ไอคอน)
+        const LEVEL1_POOL = [
+            { id: 'raw_main', icon: '🪨', title: 'วัตถุดิบหลัก', desc: 'ดิน เฟลด์สปาร์ และควอตซ์' },
+            { id: 'raw_sub', icon: '🧪', title: 'วัตถุดิบเสริม', desc: 'แร่และสารประกอบออกไซด์' },
+            { id: 'form_wheel', icon: '🎡', title: 'การใช้แป้นหมุน', desc: 'วิธีขึ้นรูปผลิตภัณฑ์เซรามิก' },
+            { id: 'form_cast', icon: '🫗', title: 'การเทแบบ', desc: 'วิธีขึ้นรูปโดยหล่อลงแม่พิมพ์' },
+            { id: 'fire_bisque', icon: '🔥', title: 'การเผาดิบ', desc: 'เผาให้คงรูป ไม่แตกชำรุด' },
+            { id: 'fire_glaze', icon: '✨', title: 'การเผาเคลือบ', desc: 'เคลือบน้ำยาแล้วให้ความร้อน' },
+            { id: 'use_glass', icon: '🥃', title: 'ผลิตภัณฑ์จากแก้ว', desc: 'การใช้ประโยชน์วัสดุเซรามิก' },
+            { id: 'use_cement', icon: '🏗️', title: 'ปูนซีเมนต์', desc: 'วัสดุประเภทเซรามิกในงานก่อสร้าง' }
+        ];
+
+        // ข้อมูลสำหรับด่านที่ 2: จับคู่ความสัมพันธ์ (โจทย์ฝั่งซ้าย <-> คำตอบฝั่งขวา)
+        const LEVEL2_POOL = [
+            { id: 'm1', left: 'ดิน เฟลด์สปาร์ และควอตซ์', right: 'วัตถุดิบหลักในอุตสาหกรรมเซรามิก' },
+            { id: 'm2', left: 'แร่และสารประกอบออกไซด์', right: 'วัตถุดิบเสริมในอุตสาหกรรมเซรามิก' },
+            { id: 'm3', left: 'การเทแบบ และ การใช้แป้นหมุน', right: '2 วิธีในการขึ้นรูปผลิตภัณฑ์' },
+            { id: 'm4', left: 'การเผาดิบ', right: 'เผาเพื่อให้ผลิตภัณฑ์คงรูป ไม่แตกชำรุด' },
+            { id: 'm5', left: 'การเผาเคลือบ', right: 'นำมาเคลือบน้ำยาแล้วนำไปให้ความร้อน' },
+            { id: 'm6', left: 'ผลิตภัณฑ์จากแก้ว ปูนซีเมนต์', right: 'ตัวอย่างการใช้ประโยชน์วัสดุเซรามิก' },
+            { id: 'm7', left: 'ดิน หิน ทราย นำมาผสมแล้วเผา', right: 'ความหมายของผลิตภัณฑ์เซรามิก' }
+        ];
+
+        // คลังข้อสอบสำหรับด่านที่ 3: 4 ตัวเลือก (สุ่มมา 5 ข้อ และสลับตัวเลือกทุกครั้ง)
+        const LEVEL3_QUIZ_POOL = [
+            {
+                q: "เซรามิก คือผลิตภัณฑ์ที่ทำมาจากวัตถุดิบในธรรมชาติชนิดใดนำมาผสมแล้วเผา?",
+                options: ["ดิน หิน ทราย", "ไม้ ยาง พลาสติก", "เหล็ก ทองแดง สังกะสี", "ถ่านหิน น้ำมันดิบ ก๊าซ"],
+                answer: "ดิน หิน ทราย"
+            },
+            {
+                q: "ข้อใดคือ 'วัตถุดิบหลัก' ที่ใช้ในอุตสาหกรรมเซรามิกทั้งหมด?",
+                options: ["ดิน เฟลด์สปาร์ และควอตซ์", "แร่และสารประกอบออกไซด์", "ปูนซีเมนต์ แก้ว และทราย", "ดินเหนียว ยางพารา และหินปูน"],
+                answer: "ดิน เฟลด์สปาร์ และควอตซ์"
+            },
+            {
+                q: "แร่และสารประกอบออกไซด์ จัดเป็นวัตถุดิบประเภทใดในการผลิตเซรามิก?",
+                options: ["วัตถุดิบเสริม", "วัตถุดิบหลัก", "น้ำยาเคลือบผิว", "เชื้อเพลิงในการเผา"],
+                answer: "วัตถุดิบเสริม"
+            },
+            {
+                q: "การขึ้นรูปผลิตภัณฑ์เซรามิก สามารถทำได้กี่วิธี และมีวิธีใดบ้าง?",
+                options: ["2 วิธี ได้แก่ การเทแบบและการใช้แป้นหมุน", "2 วิธี ได้แก่ การเผาดิบและการเผาเคลือบ", "3 วิธี ได้แก่ การหล่อ การกลึง และการรีด", "1 วิธี คือ การปั้นด้วยมือเปล่าเท่านั้น"],
+                answer: "2 วิธี ได้แก่ การเทแบบและการใช้แป้นหมุน"
+            },
+            {
+                q: "วัตถุประสงค์สำคัญของ 'การเผาดิบ' ในขั้นตอนการผลิตเซรามิกคืออะไร?",
+                options: ["เพื่อให้ผลิตภัณฑ์คงรูป ไม่แตกชำรุด", "เพื่อให้ผิวผลิตภัณฑ์มันวาวสวยงาม", "เพื่อเปลี่ยนสีของเนื้อดินให้ใสเหมือนแก้ว", "เพื่อลดน้ำหนักของผลิตภัณฑ์ให้เบาลง"],
+                answer: "เพื่อให้ผลิตภัณฑ์คงรูป ไม่แตกชำรุด"
+            },
+            {
+                q: "ขั้นตอนใดที่ต้องนำผลิตภัณฑ์มาเคลือบน้ำยาแล้วนำไปให้ความร้อน?",
+                options: ["การเผาเคลือบ", "การเผาดิบ", "การเทแบบ", "การใช้แป้นหมุน"],
+                answer: "การเผาเคลือบ"
+            },
+            {
+                q: "ข้อใดคือตัวอย่างการใช้ประโยชน์จากวัสดุประเภทเซรามิก?",
+                options: ["ผลิตภัณฑ์จากแก้ว และปูนซีเมนต์", "ขวดพลาสติก และยางรถยนต์", "กระป๋องอะลูมิเนียม และสายไฟทองแดง", "กระดาษลัง และไม้อัด"],
+                answer: "ผลิตภัณฑ์จากแก้ว และปูนซีเมนต์"
+            }
+        ];
+
+        /* =====================================================================
+           4. ตัวแปรสถานะเกม (Game State)
+           ===================================================================== */
+        let gameState = {
+            currentLevel: 1,
+            totalScore: 0,
+            levelScores: { 1: 0, 2: 0, 3: 0 },
+            timeBonusTotal: 0,
+            clearBonus: 0,
+            levelsCompleted: 0,
+            timerInterval: null,
+            timeLeft: 60
+        };
+
+        // ฟังก์ชันสลับลำดับอาร์เรย์แบบ Fisher-Yates Shuffle
+        function shuffleArray(array) {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        /* =====================================================================
+           5. การจัดการหน้าจอและตัวจับเวลา
+           ===================================================================== */
+        function switchScreen(screenId) {
+            ['screen-cover', 'screen-game', 'screen-summary'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(screenId).classList.remove('hidden');
+        }
+
+        function openStudyModal() {
+            playSound('click');
+            document.getElementById('modal-study').classList.remove('hidden');
+        }
+
+        function closeStudyModal() {
+            playSound('click');
+            document.getElementById('modal-study').classList.add('hidden');
+        }
+
+        function confirmExit() {
+            playSound('click');
+            document.getElementById('modal-confirm-exit').classList.remove('hidden');
+        }
+
+        function closeExitModal() {
+            document.getElementById('modal-confirm-exit').classList.add('hidden');
+        }
+
+        function exitToCover() {
+            stopTimer();
+            closeExitModal();
+            switchScreen('screen-cover');
+        }
+
+        function showToast(text, colorClass = "bg-emerald-400 text-black") {
+            const toast = document.getElementById('feedback-toast');
+            toast.textContent = text;
+            toast.className = `transition-opacity duration-300 px-4 py-1 rounded-full text-xs sm:text-sm font-bold shadow-lg ${colorClass} opacity-100`;
+            setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0');
+            }, 1600);
+        }
+
+        function updateHUD() {
+            document.getElementById('hud-level-badge').textContent = `ด่านที่ ${gameState.currentLevel}/3`;
+            document.getElementById('hud-score').textContent = gameState.totalScore.toLocaleString();
+        }
+
+        function startTimer(seconds, onTimeUp) {
+            stopTimer();
+            gameState.timeLeft = seconds;
+            renderTimer();
+            gameState.timerInterval = setInterval(() => {
+                gameState.timeLeft--;
+                renderTimer();
+                if (gameState.timeLeft <= 0) {
+                    stopTimer();
+                    onTimeUp();
+                }
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (gameState.timerInterval) {
+                clearInterval(gameState.timerInterval);
+                gameState.timerInterval = null;
+            }
+        }
+
+        function renderTimer() {
+            const timerEl = document.getElementById('hud-timer');
+            const mins = Math.floor(gameState.timeLeft / 60).toString().padStart(2, '0');
+            const secs = (gameState.timeLeft % 60).toString().padStart(2, '0');
+            timerEl.textContent = `${mins}:${secs}`;
+            if (gameState.timeLeft <= 10) {
+                timerEl.classList.remove('text-amber-300');
+                timerEl.classList.add('text-red-400', 'animate-pulse');
+            } else {
+                timerEl.classList.remove('text-red-400', 'animate-pulse');
+                timerEl.classList.add('text-amber-300');
+            }
+        }
+
+        /* =====================================================================
+           6. เริ่มเกมใหม่ & ควบคุมการเปลี่ยนด่าน
+           ===================================================================== */
+        function startGame() {
+            playSound('click');
+            gameState = {
+                currentLevel: 1,
+                totalScore: 0,
+                levelScores: { 1: 0, 2: 0, 3: 0 },
+                timeBonusTotal: 0,
+                clearBonus: 0,
+                levelsCompleted: 0,
+                timerInterval: null,
+                timeLeft: 60
+            };
+            switchScreen('screen-game');
+            loadLevel(1);
+        }
+
+        function loadLevel(levelNum) {
+            gameState.currentLevel = levelNum;
+            updateHUD();
+            const board = document.getElementById('game-board');
+            board.innerHTML = '';
+
+            if (levelNum === 1) {
+                setupLevel1();
+            } else if (levelNum === 2) {
+                setupLevel2();
+            } else if (levelNum === 3) {
+                setupLevel3();
+            }
+        }
+
+        function completeLevel(levelNum, basePoints, isTimeout = false) {
+            stopTimer();
+            playSound('win');
+
+            // คำนวณโบนัสเวลา (วินาทีที่เหลือ x 5 คะแนน)
+            const timeBonus = isTimeout ? 0 : gameState.timeLeft * 5;
+            const earnedThisLevel = basePoints + timeBonus;
+
+            gameState.levelScores[levelNum] = basePoints;
+            gameState.timeBonusTotal += timeBonus;
+            gameState.totalScore += earnedThisLevel;
+            if (!isTimeout) gameState.levelsCompleted++;
+
+            updateHUD();
+
+            // แสดง Modal สรุปผลด่าน
+            const modal = document.getElementById('modal-level-clear');
+            document.getElementById('level-clear-icon').textContent = isTimeout ? '⏰' : '🎉';
+            document.getElementById('level-clear-title').textContent = isTimeout ? `หมดเวลาในด่านที่ ${levelNum}!` : `ผ่านด่านที่ ${levelNum} สำเร็จ!`;
+            document.getElementById('level-clear-subtitle').textContent = isTimeout ? 'ไม่เป็นไร ไปลุยเก็บคะแนนต่อในด่านถัดไป!' : 'ความจำและไหวพริบยอดเยี่ยมมาก!';
+            document.getElementById('lc-base-score').textContent = `+${basePoints}`;
+            document.getElementById('lc-time-left').textContent = isTimeout ? 0 : gameState.timeLeft;
+            document.getElementById('lc-time-bonus').textContent = `+${timeBonus}`;
+            document.getElementById('lc-total-score').textContent = gameState.totalScore.toLocaleString();
+
+            const nextBtn = document.getElementById('btn-next-level');
+            if (levelNum < 3) {
+                nextBtn.textContent = `เข้าสู่ด่านที่ ${levelNum + 1} ➡️`;
+            } else {
+                nextBtn.textContent = `ดูสรุปคะแนนรวม 🏆`;
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function proceedNextLevel() {
+            playSound('click');
+            document.getElementById('modal-level-clear').classList.add('hidden');
+            if (gameState.currentLevel < 3) {
+                loadLevel(gameState.currentLevel + 1);
+            } else {
+                showFinalSummary();
+            }
+        }
+
+        function showFinalSummary() {
+            // โบนัสพิเศษหากผ่านครบทั้ง 3 ด่านทันเวลา
+            if (gameState.levelsCompleted === 3) {
+                gameState.clearBonus = 300;
+                gameState.totalScore += 300;
+            }
+
+            document.getElementById('sum-l1').textContent = `${gameState.levelScores[1]} คะแนน`;
+            document.getElementById('sum-l2').textContent = `${gameState.levelScores[2]} คะแนน`;
+            document.getElementById('sum-l3').textContent = `${gameState.levelScores[3]} คะแนน`;
+            document.getElementById('sum-bonus-time').textContent = `+${gameState.timeBonusTotal} คะแนน`;
+            document.getElementById('sum-bonus-clear').textContent = `+${gameState.clearBonus} คะแนน`;
+            document.getElementById('sum-grand-total').textContent = `${gameState.totalScore.toLocaleString()} คะแนน`;
+
+            // จัดอันดับฉายาตามคะแนน
+            let rankText = "ฉายา: นักฝึกหัดปั้นดินเผา 🏺";
+            if (gameState.totalScore >= 1600) {
+                rankText = "ฉายา: ปรมาจารย์เซรามิกระดับตำนาน! 👑";
+            } else if (gameState.totalScore >= 1100) {
+                rankText = "ฉายา: วิศวกรเซรามิกมือโปร! 🌟";
+            } else if (gameState.totalScore >= 600) {
+                rankText = "ฉายา: ช่างฝีมือเครื่องเคลือบดินเผา ✨";
+            }
+            document.getElementById('summary-rank').textContent = rankText;
+
+            switchScreen('screen-summary');
+            if (typeof confetti === 'function') {
+                confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+            }
+        }
+
+        /* =====================================================================
+           7. ด่านที่ 1: เปิดแผ่นป้าย (Memory Flip Card - สุ่ม 6 คู่ = 12 ใบ)
+           ===================================================================== */
+        function setupLevel1() {
+            document.getElementById('level-title').textContent = "ด่านที่ 1: เปิดแผ่นป้ายความจำ AR";
+            document.getElementById('level-instruction').textContent = "เปิดป้ายจับคู่ 'หัวข้อ' กับ 'ความหมาย' ให้ครบ 6 คู่ (60 วินาที)";
+
+            // สุ่มเลือก 6 เรื่องจากคลัง
+            const selectedPairs = shuffleArray(LEVEL1_POOL).slice(0, 6);
+            let cards = [];
+            selectedPairs.forEach(item => {
+                cards.push({ pairId: item.id, type: 'title', icon: item.icon, text: item.title });
+                cards.push({ pairId: item.id, type: 'desc', icon: '📌', text: item.desc });
+            });
+            cards = shuffleArray(cards);
+
+            let flippedCards = [];
+            let matchedCount = 0;
+            let levelPoints = 0;
+            let lockBoard = false;
+
+            const grid = document.createElement('div');
+            grid.className = "grid grid-cols-3 sm:grid-cols-4 gap-2.5 sm:gap-3.5 w-full max-w-2xl px-1";
+
+            cards.forEach((cardData, idx) => {
+                const cardEl = document.createElement('div');
+                cardEl.className = "perspective h-24 sm:h-32 cursor-pointer";
+                cardEl.innerHTML = `
+                    <div class="flip-card-inner shadow-lg">
+                        <!-- ด้านหลังป้าย (ก่อนเปิด) -->
+                        <div class="flip-card-front bg-gradient-to-br from-amber-500 to-orange-700 border-2 border-amber-200 text-white">
+                            <span class="text-2xl sm:text-3xl mb-1">🏺</span>
+                            <span class="text-xs font-bold tracking-wider bg-black/25 px-2 py-0.5 rounded-full">AR #${idx + 1}</span>
+                        </div>
+                        <!-- ด้านหน้าป้าย (เมื่อเปิด) -->
+                        <div class="flip-card-back ${cardData.type === 'title' ? 'bg-amber-100 text-orange-900 border-2 border-orange-500' : 'bg-sky-50 text-sky-950 border-2 border-sky-500'}">
+                            <span class="text-xl sm:text-2xl mb-1">${cardData.icon}</span>
+                            <p class="text-xs sm:text-sm font-bold leading-snug line-clamp-3">${cardData.text}</p>
+                        </div>
+                    </div>
+                `;
+
+                cardEl.addEventListener('click', () => {
+                    if (lockBoard || cardEl.classList.contains('flipped') || cardEl.classList.contains('matched')) return;
+                    playSound('flip');
+                    cardEl.classList.add('flipped');
+                    flippedCards.push({ el: cardEl, data: cardData });
+
+                    if (flippedCards.length === 2) {
+                        lockBoard = true;
+                        const [c1, c2] = flippedCards;
+                        if (c1.data.pairId === c2.data.pairId && c1.data.type !== c2.data.type) {
+                            // จับคู่สำเร็จ!
+                            setTimeout(() => {
+                                playSound('match');
+                                c1.el.classList.add('matched', 'opacity-80', 'scale-95');
+                                c2.el.classList.add('matched', 'opacity-80', 'scale-95');
+                                matchedCount++;
+                                levelPoints += 100;
+                                gameState.totalScore += 100;
+                                updateHUD();
+                                showToast("จับคู่ถูกต้อง! +100 คะแนน", "bg-emerald-400 text-black");
+                                flippedCards = [];
+                                lockBoard = false;
+
+                                if (matchedCount === 6) {
+                                    setTimeout(() => completeLevel(1, levelPoints, false), 500);
+                                }
+                            }, 400);
+                        } else {
+                            // ไม่ตรงกัน ปิดกลับ
+                            setTimeout(() => {
+                                playSound('wrong');
+                                c1.el.classList.remove('flipped');
+                                c2.el.classList.remove('flipped');
+                                flippedCards = [];
+                                lockBoard = false;
+                            }, 850);
+                        }
+                    }
+                });
+
+                grid.appendChild(cardEl);
+            });
+
+            document.getElementById('game-board').appendChild(grid);
+
+            // เริ่มจับเวลา 60 วินาที
+            startTimer(60, () => {
+                completeLevel(1, levelPoints, true);
+            });
+        }
+
+        /* =====================================================================
+           8. ด่านที่ 2: จับคู่ความสัมพันธ์ (สุ่ม 5 ข้อ สลับฝั่งซ้ายและขวา)
+           ===================================================================== */
+        function setupLevel2() {
+            document.getElementById('level-title').textContent = "ด่านที่ 2: จับคู่พิชิตเซรามิก";
+            document.getElementById('level-instruction').textContent = "แตะเลือกฝั่งซ้าย แล้วจับคู่กับคำตอบฝั่งขวาให้ถูกต้อง (50 วินาที)";
+
+            const selectedItems = shuffleArray(LEVEL2_POOL).slice(0, 5);
+            const leftItems = shuffleArray(selectedItems.map(i => ({ id: i.id, text: i.left })));
+            const rightItems = shuffleArray(selectedItems.map(i => ({ id: i.id, text: i.right })));
+
+            let selectedLeft = null;
+            let selectedRight = null;
+            let matchedPairs = 0;
+            let levelPoints = 0;
+
+            const container = document.createElement('div');
+            container.className = "grid grid-cols-2 gap-3 sm:gap-6 w-full max-w-3xl px-1 items-center";
+
+            const leftCol = document.createElement('div');
+            leftCol.className = "space-y-2.5 sm:space-y-3";
+
+            const rightCol = document.createElement('div');
+            rightCol.className = "space-y-2.5 sm:space-y-3";
+
+            function checkMatch() {
+                if (!selectedLeft || !selectedRight) return;
+
+                if (selectedLeft.id === selectedRight.id) {
+                    // ถูกต้อง
+                    playSound('match');
+                    selectedLeft.el.className = "w-full p-3 sm:p-4 rounded-2xl bg-emerald-600/80 border-2 border-emerald-300 text-white font-bold text-xs sm:text-sm opacity-60 pointer-events-none transition";
+                    selectedRight.el.className = "w-full p-3 sm:p-4 rounded-2xl bg-emerald-600/80 border-2 border-emerald-300 text-white font-bold text-xs sm:text-sm opacity-60 pointer-events-none transition";
+                    matchedPairs++;
+                    levelPoints += 120;
+                    gameState.totalScore += 120;
+                    updateHUD();
+                    showToast("จับคู่แม่นยำ! +120 คะแนน", "bg-emerald-400 text-black");
+
+                    selectedLeft = null;
+                    selectedRight = null;
+
+                    if (matchedPairs === 5) {
+                        setTimeout(() => completeLevel(2, levelPoints, false), 500);
+                    }
+                } else {
+                    // ผิด
+                    playSound('wrong');
+                    const lEl = selectedLeft.el;
+                    const rEl = selectedRight.el;
+                    lEl.classList.add('shake-anim', 'border-red-500', 'bg-red-900/60');
+                    rEl.classList.add('shake-anim', 'border-red-500', 'bg-red-900/60');
+                    showToast("ยังไม่ตรงกัน ลองใหม่อีกครั้ง!", "bg-red-500 text-white");
+
+                    setTimeout(() => {
+                        lEl.className = getDefaultBtnClass('left');
+                        rEl.className = getDefaultBtnClass('right');
+                    }, 500);
+
+                    selectedLeft = null;
+                    selectedRight = null;
+                }
+            }
+
+            function getDefaultBtnClass(side) {
+                return side === 'left'
+                    ? "w-full p-3 sm:p-4 rounded-2xl ar-glass hover:bg-amber-500/20 border-2 border-amber-400/50 text-amber-100 font-semibold text-xs sm:text-sm text-left transition cursor-pointer min-h-[64px] flex items-center"
+                    : "w-full p-3 sm:p-4 rounded-2xl ar-glass hover:bg-sky-500/20 border-2 border-sky-400/50 text-sky-100 font-semibold text-xs sm:text-sm text-left transition cursor-pointer min-h-[64px] flex items-center";
+            }
+
+            leftItems.forEach(item => {
+                const btn = document.createElement('button');
+                btn.className = getDefaultBtnClass('left');
+                btn.innerHTML = `<span class="mr-2 text-amber-400">🔸</span><span>${item.text}</span>`;
+                btn.onclick = () => {
+                    playSound('click');
+                    // รีเซ็ตปุ่มซ้ายเดิมที่เลือกอยู่
+                    Array.from(leftCol.children).forEach(c => {
+                        if (!c.classList.contains('pointer-events-none')) c.className = getDefaultBtnClass('left');
+                    });
+                    btn.className = "w-full p-3 sm:p-4 rounded-2xl bg-amber-500 text-black border-2 border-white font-bold text-xs sm:text-sm text-left transition min-h-[64px] flex items-center shadow-lg scale-[1.02]";
+                    selectedLeft = { id: item.id, el: btn };
+                    checkMatch();
+                };
+                leftCol.appendChild(btn);
+            });
+
+            rightItems.forEach(item => {
+                const btn = document.createElement('button');
+                btn.className = getDefaultBtnClass('right');
+                btn.innerHTML = `<span class="mr-2 text-sky-400">🔹</span><span>${item.text}</span>`;
+                btn.onclick = () => {
+                    playSound('click');
+                    Array.from(rightCol.children).forEach(c => {
+                        if (!c.classList.contains('pointer-events-none')) c.className = getDefaultBtnClass('right');
+                    });
+                    btn.className = "w-full p-3 sm:p-4 rounded-2xl bg-sky-400 text-black border-2 border-white font-bold text-xs sm:text-sm text-left transition min-h-[64px] flex items-center shadow-lg scale-[1.02]";
+                    selectedRight = { id: item.id, el: btn };
+                    checkMatch();
+                };
+                rightCol.appendChild(btn);
+            });
+
+            container.appendChild(leftCol);
+            container.appendChild(rightCol);
+            document.getElementById('game-board').appendChild(container);
+
+            // ด่าน 2 ยากขึ้น ลดเวลาเหลือ 50 วินาที
+            startTimer(50, () => {
+                completeLevel(2, levelPoints, true);
+            });
+        }
+
+        /* =====================================================================
+           9. ด่านที่ 3: ข้อสอบ 4 ตัวเลือก 5 ข้อ (สุ่มโจทย์ & สลับตัวเลือกทุกครั้ง)
+           ===================================================================== */
+        function setupLevel3() {
+            document.getElementById('level-title').textContent = "ด่านที่ 3: บททดสอบเซียนเซรามิก";
+            document.getElementById('level-instruction').textContent = "ตอบคำถาม 4 ตัวเลือก จำนวน 5 ข้อ ให้ทันเวลา (45 วินาที)";
+
+            // สุ่มเลือก 5 ข้อจากคลังข้อสอบ
+            const questions = shuffleArray(LEVEL3_QUIZ_POOL).slice(0, 5);
+            let currentQIndex = 0;
+            let levelPoints = 0;
+            let isAnswering = false;
+
+            const board = document.getElementById('game-board');
+
+            function renderQuestion() {
+                if (currentQIndex >= questions.length) {
+                    completeLevel(3, levelPoints, false);
+                    return;
+                }
+
+                isAnswering = false;
+                const qObj = questions[currentQIndex];
+                // สลับลำดับ 4 ตัวเลือกใหม่ทุกครั้ง
+                const shuffledOptions = shuffleArray(qObj.options);
+                const choiceLabels = ['ก', 'ข', 'ค', 'ง'];
+
+                board.innerHTML = `
+                    <div class="w-full max-w-2xl ar-glass rounded-3xl p-4 sm:p-6 border-2 border-amber-400/60 shadow-2xl">
+                        <!-- แถบความคืบหน้าข้อสอบ -->
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="bg-orange-500 text-white text-xs sm:text-sm font-bold px-3 py-1 rounded-full">
+                                ข้อที่ ${currentQIndex + 1} / 5
+                            </span>
+                            <div class="flex gap-1.5">
+                                ${questions.map((_, i) => `
+                                    <span class="w-6 h-2 rounded-full ${i < currentQIndex ? 'bg-emerald-400' : i === currentQIndex ? 'bg-amber-400 animate-pulse' : 'bg-gray-600'}"></span>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <!-- คำถาม -->
+                        <div class="bg-black/40 p-4 rounded-2xl border border-amber-500/30 mb-4">
+                            <p class="text-base sm:text-xl font-bold text-amber-100 leading-relaxed">
+                                ${qObj.q}
+                            </p>
+                        </div>
+
+                        <!-- ตัวเลือก 4 ข้อ -->
+                        <div id="quiz-options" class="space-y-2.5 sm:space-y-3"></div>
+                    </div>
+                `;
+
+                const optionsContainer = document.getElementById('quiz-options');
+
+                shuffledOptions.forEach((optText, idx) => {
+                    const btn = document.createElement('button');
+                    btn.className = "w-full p-3.5 sm:p-4 rounded-2xl bg-stone-800/90 hover:bg-amber-600/40 border-2 border-amber-400/40 text-left flex items-center gap-3 transition transform active:scale-[0.99] cursor-pointer";
+                    btn.innerHTML = `
+                        <span class="w-8 h-8 rounded-full bg-amber-500 text-black font-extrabold flex items-center justify-center shrink-0 text-sm sm:text-base">
+                            ${choiceLabels[idx]}
+                        </span>
+                        <span class="text-sm sm:text-base font-medium text-white">${optText}</span>
+                    `;
+
+                    btn.onclick = () => {
+                        if (isAnswering) return;
+                        isAnswering = true;
+
+                        const isCorrect = (optText === qObj.answer);
+                        if (isCorrect) {
+                            playSound('match');
+                            btn.className = "w-full p-3.5 sm:p-4 rounded-2xl bg-emerald-600 border-2 border-emerald-200 text-left flex items-center gap-3 shadow-lg";
+                            levelPoints += 150;
+                            gameState.totalScore += 150;
+                            updateHUD();
+                            showToast("ถูกต้อง! +150 คะแนน", "bg-emerald-400 text-black");
+                        } else {
+                            playSound('wrong');
+                            btn.className = "w-full p-3.5 sm:p-4 rounded-2xl bg-red-600 border-2 border-red-200 text-left flex items-center gap-3 shake-anim";
+                            showToast(`ผิด! คำตอบที่ถูกคือ: ${qObj.answer}`, "bg-red-500 text-white");
+                            
+                            // ไฮไลต์ข้อที่ถูกต้องให้ผู้เรียนเห็น
+                            Array.from(optionsContainer.children).forEach((childBtn, cIdx) => {
+                                if (shuffledOptions[cIdx] === qObj.answer) {
+                                    childBtn.className = "w-full p-3.5 sm:p-4 rounded-2xl bg-emerald-600/80 border-2 border-emerald-300 text-left flex items-center gap-3";
+                                }
+                            });
+                        }
+
+                        setTimeout(() => {
+                            currentQIndex++;
+                            renderQuestion();
+                        }, 1100);
+                    };
+
+                    optionsContainer.appendChild(btn);
+                });
+            }
+
+            renderQuestion();
+
+            // ด่าน 3 ระดับความยากสูงสุด จับเวลา 45 วินาที
+            startTimer(45, () => {
+                completeLevel(3, levelPoints, true);
+            });
+        }
+    </script>
+</body>
+</html>
